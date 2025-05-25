@@ -3,8 +3,11 @@ import { useState } from "react";
 import { WeatherForm } from "../components/WeatherForm";
 import { WeatherResult } from "../components/WeatherResult";
 import { Cloud, Sun, CloudRain } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 export interface WeatherData {
+  id?: string;
   name: string;
   email: string;
   city: string;
@@ -12,28 +15,65 @@ export interface WeatherData {
   condition: string;
   aqi: number;
   timestamp: string;
+  aiCommentary?: string;
+  emailValid?: boolean;
 }
 
 const Index = () => {
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
   const handleFormSubmit = async (formData: { name: string; email: string; city: string }) => {
     setIsLoading(true);
     console.log("Form submitted:", formData);
     
-    // Simulate API call for now - this will be replaced with actual weather API integration
-    setTimeout(() => {
-      const mockWeatherData: WeatherData = {
-        ...formData,
-        temperature: Math.floor(Math.random() * 30) + 5, // Random temp between 5-35°C
-        condition: ["Sunny", "Cloudy", "Partly Cloudy", "Rainy"][Math.floor(Math.random() * 4)],
-        aqi: Math.floor(Math.random() * 150) + 50, // Random AQI between 50-200
+    try {
+      // Call the edge function for weather automation
+      const { data, error } = await supabase.functions.invoke('weather-automation', {
+        body: formData
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Weather data fetch failed');
+      }
+
+      const result = data.data;
+      
+      const weatherResult: WeatherData = {
+        id: result.id,
+        name: formData.name,
+        email: formData.email,
+        city: formData.city,
+        temperature: result.temperature,
+        condition: result.condition,
+        aqi: result.aqi,
         timestamp: new Date().toISOString(),
+        aiCommentary: result.aiCommentary,
+        emailValid: result.emailValid
       };
-      setWeatherData(mockWeatherData);
+
+      setWeatherData(weatherResult);
+      
+      toast({
+        title: "Weather Report Generated!",
+        description: "Check your email for the full weather summary.",
+      });
+
+    } catch (error) {
+      console.error("Error fetching weather data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch weather data. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
-    }, 2000);
+    }
   };
 
   const resetForm = () => {

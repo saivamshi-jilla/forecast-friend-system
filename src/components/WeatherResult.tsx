@@ -1,7 +1,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Thermometer, Eye, Wind } from "lucide-react";
+import { ArrowLeft, Thermometer, Eye, Wind, Mail, CheckCircle, XCircle, Sparkles } from "lucide-react";
 import { WeatherData } from "../pages/Index";
 
 interface WeatherResultProps {
@@ -13,13 +13,18 @@ export const WeatherResult = ({ data, onReset }: WeatherResultProps) => {
   const getWeatherIcon = (condition: string) => {
     switch (condition.toLowerCase()) {
       case "sunny":
+      case "clear":
         return "☀️";
       case "cloudy":
+      case "overcast":
         return "☁️";
       case "partly cloudy":
         return "⛅";
       case "rainy":
+      case "rain":
         return "🌧️";
+      case "snow":
+        return "❄️";
       default:
         return "🌤️";
     }
@@ -46,6 +51,22 @@ export const WeatherResult = ({ data, onReset }: WeatherResultProps) => {
           Weather Report for {data.name}
         </CardTitle>
         <p className="text-gray-600">Here's your personalized weather summary!</p>
+        
+        {/* Email Validation Status */}
+        <div className="flex items-center justify-center gap-2 mt-2">
+          <Mail size={16} className="text-gray-500" />
+          {data.emailValid ? (
+            <div className="flex items-center gap-1 text-green-600">
+              <CheckCircle size={16} />
+              <span className="text-sm">Email sent successfully</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-red-600">
+              <XCircle size={16} />
+              <span className="text-sm">Invalid email format</span>
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="text-center">
@@ -85,6 +106,17 @@ export const WeatherResult = ({ data, onReset }: WeatherResultProps) => {
           </div>
         </div>
 
+        {/* AI Commentary Section */}
+        {data.aiCommentary && (
+          <div className="bg-purple-50 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="text-purple-600" size={20} />
+              <h4 className="font-semibold text-purple-800">AI Weather Insights</h4>
+            </div>
+            <p className="text-purple-700 text-sm italic">{data.aiCommentary}</p>
+          </div>
+        )}
+
         <div className="bg-blue-50 rounded-lg p-4">
           <h4 className="font-semibold text-gray-800 mb-2">Summary Email Preview:</h4>
           <div className="text-sm text-gray-700 space-y-2 bg-white p-3 rounded border-l-4 border-blue-500">
@@ -96,6 +128,9 @@ export const WeatherResult = ({ data, onReset }: WeatherResultProps) => {
               <li>Condition: <strong>{data.condition}</strong></li>
               <li>AQI: <strong>{data.aqi} ({getAQIStatus(data.aqi)})</strong></li>
             </ul>
+            {data.aiCommentary && (
+              <p className="italic text-purple-600">{data.aiCommentary}</p>
+            )}
             <p>Stay safe and take care!</p>
             <p><strong>Thanks,<br />AI Weather Reporter</strong></p>
           </div>
