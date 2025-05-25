@@ -13,12 +13,6 @@ interface WeatherRequest {
   city: string;
 }
 
-interface WeatherData {
-  temperature: number;
-  condition: string;
-  aqi: number;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -26,6 +20,7 @@ serve(async (req) => {
 
   try {
     const { name, email, city }: WeatherRequest = await req.json()
+    console.log('Received request:', { name, email, city })
     
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -35,22 +30,29 @@ serve(async (req) => {
     // Validate email
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
     const emailValid = emailRegex.test(email)
+    console.log('Email validation result:', emailValid)
     
     // Get weather data
     const weatherApiKey = Deno.env.get('WEATHER_API_KEY')
+    console.log('Weather API key exists:', !!weatherApiKey)
+    
     if (!weatherApiKey) {
       throw new Error('Weather API key not configured')
     }
     
-    const weatherResponse = await fetch(
-      `http://api.weatherapi.com/v1/current.json?key=${weatherApiKey}&q=${encodeURIComponent(city)}&aqi=yes`
-    )
+    const weatherUrl = `http://api.weatherapi.com/v1/current.json?key=${weatherApiKey}&q=${encodeURIComponent(city)}&aqi=yes`
+    console.log('Fetching weather from:', weatherUrl.replace(weatherApiKey, 'HIDDEN'))
+    
+    const weatherResponse = await fetch(weatherUrl)
     
     if (!weatherResponse.ok) {
-      throw new Error('Failed to fetch weather data')
+      const errorText = await weatherResponse.text()
+      console.error('Weather API error:', errorText)
+      throw new Error(`Failed to fetch weather data: ${weatherResponse.status} ${errorText}`)
     }
     
     const weatherData = await weatherResponse.json()
+    console.log('Weather data received:', weatherData)
     
     const temperature = weatherData.current.temp_c
     const condition = weatherData.current.condition.text
@@ -62,6 +64,7 @@ serve(async (req) => {
     
     if (openaiApiKey) {
       try {
+        console.log('Generating AI commentary...')
         const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -69,7 +72,7 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'gpt-3.5-turbo',
+            model: 'gpt-4o-mini',
             messages: [{
               role: 'user',
               content: `Based on this weather data: Temperature ${temperature}°C, Condition: ${condition}, AQI: ${aqi}, provide a brief 1-2 sentence helpful comment about the weather conditions for outdoor activities.`
@@ -81,13 +84,19 @@ serve(async (req) => {
         if (openaiResponse.ok) {
           const openaiData = await openaiResponse.json()
           aiCommentary = openaiData.choices[0]?.message?.content || ""
+          console.log('AI commentary generated:', aiCommentary)
+        } else {
+          console.log('OpenAI API failed:', await openaiResponse.text())
         }
       } catch (error) {
         console.log('AI commentary failed:', error)
       }
+    } else {
+      console.log('OpenAI API key not configured, skipping AI commentary')
     }
     
     // Store in database
+    console.log('Storing in database...')
     const { data: dbData, error: dbError } = await supabase
       .from('weather_reports')
       .insert({
@@ -104,13 +113,17 @@ serve(async (req) => {
       .single()
     
     if (dbError) {
+      console.error('Database error:', dbError)
       throw new Error(`Database error: ${dbError.message}`)
     }
     
+    console.log('Data stored successfully:', dbData)
+    
     // Send email
-    const emailApiKey = Deno.env.get('BREVO_API_KEY')
-    if (emailApiKey) {
+    const brevoApiKey = Deno.env.get('BREVO_API_KEY')
+    if (brevoApiKey && emailValid) {
       try {
+        console.log('Sending email...')
         const emailData = {
           sender: { email: "noreply@weather-app.com", name: "AI Weather Reporter" },
           to: [{ email: email, name: name }],
@@ -130,18 +143,26 @@ serve(async (req) => {
           `
         }
         
-        await fetch('https://api.brevo.com/v3/smtp/email', {
+        const emailResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json',
-            'api-key': emailApiKey
+            'api-key': brevoApiKey
           },
           body: JSON.stringify(emailData)
         })
+        
+        if (emailResponse.ok) {
+          console.log('Email sent successfully')
+        } else {
+          console.log('Email sending failed:', await emailResponse.text())
+        }
       } catch (error) {
         console.log('Email sending failed:', error)
       }
+    } else {
+      console.log('Email not sent - either no API key or invalid email')
     }
     
     return new Response(

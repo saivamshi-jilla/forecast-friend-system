@@ -17,29 +17,36 @@ serve(async (req) => {
     
     // Extract form data (format may vary based on source)
     const formData = {
-      name: body.name || body.full_name || body['Full Name'],
-      email: body.email || body['Email'],
-      city: body.city || body['City']
+      name: body.name || body.full_name || body['Full Name'] || body['name'],
+      email: body.email || body['Email'] || body['email'],
+      city: body.city || body['City'] || body['city']
     }
+    
+    console.log('Extracted form data:', formData)
     
     if (!formData.name || !formData.email || !formData.city) {
       throw new Error('Missing required fields: name, email, city')
     }
     
     // Forward to weather automation function
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
+    
+    console.log('Forwarding to weather automation...')
     const weatherResponse = await fetch(
-      `${Deno.env.get('SUPABASE_URL')}/functions/v1/weather-automation`,
+      `${supabaseUrl}/functions/v1/weather-automation`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`
+          'Authorization': `Bearer ${supabaseAnonKey}`
         },
         body: JSON.stringify(formData)
       }
     )
     
     const weatherData = await weatherResponse.json()
+    console.log('Weather automation response:', weatherData)
     
     return new Response(
       JSON.stringify({
